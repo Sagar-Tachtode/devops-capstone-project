@@ -1,6 +1,5 @@
 """
 Test cases for Account Model
-
 """
 import logging
 import unittest
@@ -8,6 +7,7 @@ import os
 from service import app
 from service.models import Account, DataValidationError, db
 from tests.factories import AccountFactory
+from service.common import status
 
 DATABASE_URI = os.getenv(
     "DATABASE_URI", "postgresql://postgres:postgres@localhost:5432/postgres"
@@ -49,7 +49,6 @@ class TestAccount(unittest.TestCase):
     def test_create_an_account(self):
         """It should Create an Account and assert that it exists"""
         fake_account = AccountFactory()
-        # pylint: disable=unexpected-keyword-arg
         account = Account(
             name=fake_account.name,
             email=fake_account.email,
@@ -71,7 +70,6 @@ class TestAccount(unittest.TestCase):
         self.assertEqual(accounts, [])
         account = AccountFactory()
         account.create()
-        # Assert that it was assigned an id and shows up in the database
         self.assertIsNotNone(account.id)
         accounts = Account.all()
         self.assertEqual(len(accounts), 1)
@@ -81,7 +79,6 @@ class TestAccount(unittest.TestCase):
         account = AccountFactory()
         account.create()
 
-        # Read it back
         found_account = Account.find(account.id)
         self.assertEqual(found_account.id, account.id)
         self.assertEqual(found_account.name, account.name)
@@ -90,22 +87,31 @@ class TestAccount(unittest.TestCase):
         self.assertEqual(found_account.phone_number, account.phone_number)
         self.assertEqual(found_account.date_joined, account.date_joined)
 
+    def test_read_account_not_found(self):
+        """It should return None if account is not found"""
+        found_account = Account.find(0)
+        self.assertIsNone(found_account)
+
     def test_update_account(self):
         """It should Update an account"""
         account = AccountFactory(email="advent@change.me")
         account.create()
-        # Assert that it was assigned an id and shows up in the database
         self.assertIsNotNone(account.id)
         self.assertEqual(account.email, "advent@change.me")
 
-        # Fetch it back
         account = Account.find(account.id)
         account.email = "XYZZY@plugh.com"
         account.update()
 
-        # Fetch it back again
         account = Account.find(account.id)
         self.assertEqual(account.email, "XYZZY@plugh.com")
+
+    def test_update_account_not_found(self):
+        """It should raise an error when updating a non-existent account"""
+        account = AccountFactory()
+        account.id = 0
+        with self.assertRaises(DataValidationError):
+            account.update()
 
     def test_delete_an_account(self):
         """It should Delete an account from the database"""
@@ -113,7 +119,6 @@ class TestAccount(unittest.TestCase):
         self.assertEqual(accounts, [])
         account = AccountFactory()
         account.create()
-        # Assert that it was assigned an id and shows up in the database
         self.assertIsNotNone(account.id)
         accounts = Account.all()
         self.assertEqual(len(accounts), 1)
@@ -122,13 +127,21 @@ class TestAccount(unittest.TestCase):
         accounts = Account.all()
         self.assertEqual(len(accounts), 0)
 
+    def test_delete_account_not_found(self):
+        """It should not raise an error when deleting a non-existent account"""
+        account = Account()
+        account.id = 0
+        try:
+            account.delete()
+        except Exception as e:
+            self.fail(f"Deleting non-existent account raised Exception: {e}")
+
     def test_list_all_accounts(self):
         """It should List all Accounts in the database"""
         accounts = Account.all()
         self.assertEqual(accounts, [])
         for account in AccountFactory.create_batch(5):
             account.create()
-        # Assert that there are not 5 accounts in the database
         accounts = Account.all()
         self.assertEqual(len(accounts), 5)
 
@@ -137,7 +150,6 @@ class TestAccount(unittest.TestCase):
         account = AccountFactory()
         account.create()
 
-        # Fetch it back by name
         same_account = Account.find_by_name(account.name)[0]
         self.assertEqual(same_account.id, account.id)
         self.assertEqual(same_account.name, account.name)
